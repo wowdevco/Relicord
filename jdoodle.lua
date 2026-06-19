@@ -152,9 +152,39 @@ closeBtn.TextSize = 20
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.Parent = mainFrame
 
--- Functions
+-- ==================== IMPROVED LOGIC ====================
+
+local lockedStats = {}
+
+local function lockStat(statName, value)
+    if lockedStats[statName] then
+        lockedStats[statName]:Disconnect()
+    end
+    
+    local stat = leaderstats:FindFirstChild(statName)
+    if not stat then 
+        warn("Stat " .. statName .. " not found!")
+        return 
+    end
+    
+    stat.Value = value
+    
+    local connection
+    connection = game:GetService("RunService").Heartbeat:Connect(function()
+        if stat and stat.Parent then
+            stat.Value = value
+        else
+            connection:Disconnect()
+            lockedStats[statName] = nil
+        end
+    end)
+    
+    lockedStats[statName] = connection
+    print("Locked " .. statName .. " at " .. value)
+end
+
 local function updateLeaderstat()
-    local currencyName = currencyBox.Text:gsub("%s+", "") -- trim spaces
+    local currencyName = currencyBox.Text:gsub("%s+", "")
     local amountStr = amountBox.Text:gsub("%s+", "")
     local amount = tonumber(amountStr)
     
@@ -165,8 +195,7 @@ local function updateLeaderstat()
     
     local stat = leaderstats:FindFirstChild(currencyName)
     if stat then
-        stat.Value = amount
-        print("Updated " .. currencyName .. " to " .. amount)
+        lockStat(currencyName, amount)
     else
         warn("Leaderstat '" .. currencyName .. "' not found!")
     end
@@ -174,7 +203,12 @@ end
 
 -- Connections
 doneBtn.MouseButton1Click:Connect(updateLeaderstat)
+
 closeBtn.MouseButton1Click:Connect(function()
+    -- Cleanup loops
+    for _, conn in pairs(lockedStats) do
+        if conn then conn:Disconnect() end
+    end
     screenGui:Destroy()
 end)
 
@@ -186,7 +220,7 @@ winsBtn.MouseButton1Click:Connect(function()
     currencyBox.Text = "Wins"
 end)
 
--- Make draggable
+-- Make draggable (unchanged)
 local dragging
 local dragInput
 local dragStart
@@ -223,4 +257,4 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
     end
 end)
 
-print("Leaderstats Editor GUI loaded!")
+print("Leaderstats Editor GUI loaded with persistence!")
