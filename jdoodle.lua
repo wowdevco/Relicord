@@ -1,5 +1,5 @@
 -- Simple Roblox Leaderstats Editor GUI (One Script)
--- For executors like Delta, Solara, etc.
+-- For executors like Delta, Solara, etc. - Optimized for Quiet or Die
 
 local player = game.Players.LocalPlayer
 local leaderstats = player:WaitForChild("leaderstats", 10)
@@ -15,7 +15,7 @@ screenGui.Name = "LeaderstatsEditor"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
--- Main Frame
+-- Main Frame (unchanged)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 350, 0, 280)
@@ -31,7 +31,7 @@ uiCorner.Parent = mainFrame
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 40)
 title.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-title.Text = "Leaderstats Editor"
+title.Text = "Leaderstats Editor - Quiet or Die"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextSize = 18
 title.Font = Enum.Font.GothamBold
@@ -84,7 +84,7 @@ local amountBox = Instance.new("TextBox")
 amountBox.Size = UDim2.new(0.9, 0, 0, 35)
 amountBox.Position = UDim2.new(0.05, 0, 0, 135)
 amountBox.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-amountBox.Text = "1000"
+amountBox.Text = "1000000"
 amountBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 amountBox.TextSize = 16
 amountBox.Font = Enum.Font.Gotham
@@ -131,7 +131,7 @@ local doneBtn = Instance.new("TextButton")
 doneBtn.Size = UDim2.new(0.9, 0, 0, 45)
 doneBtn.Position = UDim2.new(0.05, 0, 0, 225)
 doneBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
-doneBtn.Text = "UPDATE LEADERSTAT"
+doneBtn.Text = "UPDATE & LOCK"
 doneBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 doneBtn.Font = Enum.Font.GothamBold
 doneBtn.TextSize = 16
@@ -152,35 +152,51 @@ closeBtn.TextSize = 20
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.Parent = mainFrame
 
--- ==================== IMPROVED LOGIC ====================
+-- ==================== ADVANCED LOCK FOR QUIET OR DIE ====================
 
 local lockedStats = {}
 
 local function lockStat(statName, value)
     if lockedStats[statName] then
-        lockedStats[statName]:Disconnect()
+        for _, conn in ipairs(lockedStats[statName].conns or {}) do
+            conn:Disconnect()
+        end
     end
     
     local stat = leaderstats:FindFirstChild(statName)
-    if not stat then 
-        warn("Stat " .. statName .. " not found!")
-        return 
+    if not stat then
+        warn("Stat " .. statName .. " not found! Check spelling (Coins / Wins)")
+        return
     end
-    
+
     stat.Value = value
+
+    local connections = {}
+
+    -- Aggressive RunService loops
+    table.insert(connections, game:GetService("RunService").Heartbeat:Connect(function()
+        if stat and stat.Parent then stat.Value = value end
+    end))
     
-    local connection
-    connection = game:GetService("RunService").Heartbeat:Connect(function()
-        if stat and stat.Parent then
-            stat.Value = value
-        else
-            connection:Disconnect()
-            lockedStats[statName] = nil
+    table.insert(connections, game:GetService("RunService").RenderStepped:Connect(function()
+        if stat and stat.Parent then stat.Value = value end
+    end))
+    
+    table.insert(connections, game:GetService("RunService").Stepped:Connect(function()
+        if stat and stat.Parent then stat.Value = value end
+    end))
+
+    -- Metatable hook (stronger protection against server changes)
+    local oldNewIndex
+    oldNewIndex = hookmetamethod(game, "__newindex", function(self, key, val)
+        if self == stat and key == "Value" and val ~= value then
+            return -- Block change
         end
+        return oldNewIndex(self, key, val)
     end)
-    
-    lockedStats[statName] = connection
-    print("Locked " .. statName .. " at " .. value)
+
+    lockedStats[statName] = {conns = connections, hook = oldNewIndex}
+    print("✅ Locked " .. statName .. " at " .. value .. " (with metatable protection)")
 end
 
 local function updateLeaderstat()
@@ -193,21 +209,17 @@ local function updateLeaderstat()
         return
     end
     
-    local stat = leaderstats:FindFirstChild(currencyName)
-    if stat then
-        lockStat(currencyName, amount)
-    else
-        warn("Leaderstat '" .. currencyName .. "' not found!")
-    end
+    lockStat(currencyName, amount)
 end
 
 -- Connections
 doneBtn.MouseButton1Click:Connect(updateLeaderstat)
 
 closeBtn.MouseButton1Click:Connect(function()
-    -- Cleanup loops
-    for _, conn in pairs(lockedStats) do
-        if conn then conn:Disconnect() end
+    for _, data in pairs(lockedStats) do
+        for _, conn in ipairs(data.conns or {}) do
+            if conn then conn:Disconnect() end
+        end
     end
     screenGui:Destroy()
 end)
@@ -220,7 +232,7 @@ winsBtn.MouseButton1Click:Connect(function()
     currencyBox.Text = "Wins"
 end)
 
--- Make draggable (unchanged)
+-- Draggable
 local dragging
 local dragInput
 local dragStart
@@ -257,4 +269,4 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
     end
 end)
 
-print("Leaderstats Editor GUI loaded with persistence!")
+print("Quiet or Die Leaderstats Editor loaded with metatable + loops!")
